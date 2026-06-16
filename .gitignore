@@ -177,3 +177,15 @@ outputs/
 *.urdf
 *.xml
 *.part
+
+yolo11x.pt
+yoloe-11l-seg.pt
+
+# XLeRobot: 模型权重（不入库）
+*.pt
+*.ts
+*.onnx
+*.bin
+
+# XLeRobot: Codex 配置
+.codex/
