@@ -1,4 +1,6 @@
-# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
+#!/usr/bin/env python
+
+# Copyright 2026 The HuggingFace Inc. team. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,11 +13,5 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-*.memmap filter=lfs diff=lfs merge=lfs -text
-*.stl filter=lfs diff=lfs merge=lfs -text
-*.safetensors filter=lfs diff=lfs merge=lfs -text
-*.mp4 filter=lfs diff=lfs merge=lfs -text
-*.arrow filter=lfs diff=lfs merge=lfs -text
-*.json !text !filter !merge !diff
-tests/artifacts/cameras/*.png filter=lfs diff=lfs merge=lfs -text
-*.bag filter=lfs diff=lfs merge=lfs -text
+
+from .bi_xlerobot_leader import BiXLeRobotLeader, BiXLeRobotLeaderConfig

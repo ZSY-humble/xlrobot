@@ -45,12 +45,15 @@ from lerobot.robots import (  # noqa: F401
     omx_follower,
     openarm_follower,
     so_follower,
+    xlerobot,
+    xlerobot_2wheels,
 )
 from lerobot.teleoperators import (  # noqa: F401
     Teleoperator,
     TeleoperatorConfig,
     bi_openarm_leader,
     bi_so_leader,
+    bi_xlerobot_leader,
     homunculus,
     koch_leader,
     make_teleoperator_from_config,
