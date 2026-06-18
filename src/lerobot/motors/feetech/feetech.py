@@ -218,15 +218,21 @@ class FeetechMotorsBus(SerialMotorsBus):
 
         raise RuntimeError(f"Motor '{motor}' (model '{model}') was not found. Make sure it is connected.")
 
-    def configure_motors(self, return_delay_time=0, maximum_acceleration=254, acceleration=254) -> None:
+    def configure_motors(
+        self,
+        return_delay_time=0,
+        maximum_acceleration=254,
+        acceleration=254,
+        num_retry: int = 0,
+    ) -> None:
         for motor in self.motors:
             # By default, Feetech motors have a 500µs delay response time (corresponding to a value of 250 on
             # the 'Return_Delay_Time' address). We ensure this is reduced to the minimum of 2µs (value of 0).
-            self.write("Return_Delay_Time", motor, return_delay_time)
+            self.write("Return_Delay_Time", motor, return_delay_time, num_retry=num_retry)
             # Set 'Maximum_Acceleration' to 254 to speedup acceleration and deceleration of the motors.
             if self.protocol_version == 0:
-                self.write("Maximum_Acceleration", motor, maximum_acceleration)
-            self.write("Acceleration", motor, acceleration)
+                self.write("Maximum_Acceleration", motor, maximum_acceleration, num_retry=num_retry)
+            self.write("Acceleration", motor, acceleration, num_retry=num_retry)
 
     @property
     def is_calibrated(self) -> bool:
@@ -269,12 +275,17 @@ class FeetechMotorsBus(SerialMotorsBus):
 
         return calibration
 
-    def write_calibration(self, calibration_dict: dict[str, MotorCalibration], cache: bool = True) -> None:
+    def write_calibration(
+        self,
+        calibration_dict: dict[str, MotorCalibration],
+        cache: bool = True,
+        num_retry: int = 0,
+    ) -> None:
         for motor, calibration in calibration_dict.items():
             if self.protocol_version == 0:
-                self.write("Homing_Offset", motor, calibration.homing_offset)
-            self.write("Min_Position_Limit", motor, calibration.range_min)
-            self.write("Max_Position_Limit", motor, calibration.range_max)
+                self.write("Homing_Offset", motor, calibration.homing_offset, num_retry=num_retry)
+            self.write("Min_Position_Limit", motor, calibration.range_min, num_retry=num_retry)
+            self.write("Max_Position_Limit", motor, calibration.range_max, num_retry=num_retry)
 
         if cache:
             self.calibration = calibration_dict

@@ -173,6 +173,7 @@ class XLerobot2Wheels(Robot):
         if self.is_connected:
             raise DeviceAlreadyConnectedError(f"{self} already connected")
 
+        num_retry = 5
         self.bus1.connect()
         self.bus2.connect()
         
@@ -191,8 +192,14 @@ class XLerobot2Wheels(Robot):
                     logger.info("Calibration data loaded into bus memory successfully!")
                     
                     # Write calibration data to motors
-                    self.bus1.write_calibration({k: v for k, v in self.calibration.items() if k in self.bus1.motors})
-                    self.bus2.write_calibration({k: v for k, v in self.calibration.items() if k in self.bus2.motors})
+                    self.bus1.write_calibration(
+                        {k: v for k, v in self.calibration.items() if k in self.bus1.motors},
+                        num_retry=num_retry,
+                    )
+                    self.bus2.write_calibration(
+                        {k: v for k, v in self.calibration.items() if k in self.bus2.motors},
+                        num_retry=num_retry,
+                    )
                     logger.info("Calibration restored successfully from file!")
                     
                 except Exception as e:
@@ -247,7 +254,7 @@ class XLerobot2Wheels(Robot):
                 range_max=range_maxes[name],
             )
         
-        self.bus1.write_calibration(calibration_left)
+        self.bus1.write_calibration(calibration_left, num_retry=5)
         
         # calib right motors
         right_motors = self.right_arm_motors + self.base_motors
@@ -287,7 +294,7 @@ class XLerobot2Wheels(Robot):
                 range_max=range_maxes[name],
             )
         
-        self.bus2.write_calibration(calibration_right)
+        self.bus2.write_calibration(calibration_right, num_retry=5)
         self.calibration = {**calibration_left, **calibration_right}
         self._save_calibration()
         print("Calibration saved to", self.calibration_fpath)
@@ -296,42 +303,43 @@ class XLerobot2Wheels(Robot):
     def configure(self):
         # Set-up arm actuators (position mode)
         # We assume that at connection time, arm is in a rest position,
-        # and torque can be safely disabled to run calibration        
-        self.bus1.disable_torque()
-        self.bus2.disable_torque()
-        self.bus2.configure_motors()
-        self.bus2.configure_motors()
+        # and torque can be safely disabled to run calibration
+        num_retry = 5
+        self.bus1.disable_torque(num_retry=num_retry)
+        self.bus2.disable_torque(num_retry=num_retry)
+        self.bus1.configure_motors(num_retry=num_retry)
+        self.bus2.configure_motors(num_retry=num_retry)
         
         for name in self.left_arm_motors:
-            self.bus1.write("Operating_Mode", name, OperatingMode.POSITION.value)
+            self.bus1.write("Operating_Mode", name, OperatingMode.POSITION.value, num_retry=num_retry)
             # Set P_Coefficient to lower value to avoid shakiness (Default is 32)
-            self.bus1.write("P_Coefficient", name, 16)
+            self.bus1.write("P_Coefficient", name, 16, num_retry=num_retry)
             # Set I_Coefficient and D_Coefficient to default value 0 and 32
-            self.bus1.write("I_Coefficient", name, 0)
-            self.bus1.write("D_Coefficient", name, 43)
+            self.bus1.write("I_Coefficient", name, 0, num_retry=num_retry)
+            self.bus1.write("D_Coefficient", name, 43, num_retry=num_retry)
         
         for name in self.head_motors:
-            self.bus1.write("Operating_Mode", name, OperatingMode.POSITION.value)
+            self.bus1.write("Operating_Mode", name, OperatingMode.POSITION.value, num_retry=num_retry)
             # Set P_Coefficient to lower value to avoid shakiness (Default is 32)
-            self.bus1.write("P_Coefficient", name, 16)
+            self.bus1.write("P_Coefficient", name, 16, num_retry=num_retry)
             # Set I_Coefficient and D_Coefficient to default value 0 and 32
-            self.bus1.write("I_Coefficient", name, 0)
-            self.bus1.write("D_Coefficient", name, 43)
+            self.bus1.write("I_Coefficient", name, 0, num_retry=num_retry)
+            self.bus1.write("D_Coefficient", name, 43, num_retry=num_retry)
         
         for name in self.right_arm_motors:
-            self.bus2.write("Operating_Mode", name, OperatingMode.POSITION.value)
+            self.bus2.write("Operating_Mode", name, OperatingMode.POSITION.value, num_retry=num_retry)
             # Set P_Coefficient to lower value to avoid shakiness (Default is 32)
-            self.bus2.write("P_Coefficient", name, 16)
+            self.bus2.write("P_Coefficient", name, 16, num_retry=num_retry)
             # Set I_Coefficient and D_Coefficient to default value 0 and 32
-            self.bus2.write("I_Coefficient", name, 0)
-            self.bus2.write("D_Coefficient", name, 43)
+            self.bus2.write("I_Coefficient", name, 0, num_retry=num_retry)
+            self.bus2.write("D_Coefficient", name, 43, num_retry=num_retry)
         
         for name in self.base_motors:
-            self.bus2.write("Operating_Mode", name, OperatingMode.VELOCITY.value)
+            self.bus2.write("Operating_Mode", name, OperatingMode.VELOCITY.value, num_retry=num_retry)
         
         
-        self.bus1.enable_torque()
-        self.bus2.enable_torque()
+        self.bus1.enable_torque(num_retry=num_retry)
+        self.bus2.enable_torque(num_retry=num_retry)
         
 
     def setup_motors(self) -> None:
@@ -565,9 +573,15 @@ class XLerobot2Wheels(Robot):
         
         if self.config.max_relative_target is not None:
             # Read present positions for left arm, right arm, and head
-            present_pos_left = self.bus1.sync_read("Present_Position", self.left_arm_motors)
-            present_pos_right = self.bus2.sync_read("Present_Position", self.right_arm_motors)
-            present_pos_head = self.bus1.sync_read("Present_Position", self.head_motors)
+            present_pos_left = {
+                f"{k}.pos": v for k, v in self.bus1.sync_read("Present_Position", self.left_arm_motors).items()
+            }
+            present_pos_right = {
+                f"{k}.pos": v for k, v in self.bus2.sync_read("Present_Position", self.right_arm_motors).items()
+            }
+            present_pos_head = {
+                f"{k}.pos": v for k, v in self.bus1.sync_read("Present_Position", self.head_motors).items()
+            }
 
             # Combine all present positions
             present_pos = {**present_pos_left, **present_pos_right, **present_pos_head}
@@ -608,13 +622,24 @@ class XLerobot2Wheels(Robot):
         logger.info("Base motors stopped")
 
     def disconnect(self):
-        if not self.is_connected:
+        any_connected = self.bus1.is_connected or self.bus2.is_connected or any(
+            cam.is_connected for cam in self.cameras.values()
+        )
+        if not any_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
-        self.stop_base()
-        self.bus1.disconnect(self.config.disable_torque_on_disconnect)
-        self.bus2.disconnect(self.config.disable_torque_on_disconnect)
+        if self.bus2.is_connected:
+            try:
+                self.stop_base()
+            except Exception as exc:
+                logger.warning(f"Failed to stop base during disconnect: {exc}")
+
+        if self.bus1.is_connected:
+            self.bus1.disconnect(self.config.disable_torque_on_disconnect)
+        if self.bus2.is_connected:
+            self.bus2.disconnect(self.config.disable_torque_on_disconnect)
         for cam in self.cameras.values():
-            cam.disconnect()
+            if cam.is_connected:
+                cam.disconnect()
 
         logger.info(f"{self} disconnected.")
