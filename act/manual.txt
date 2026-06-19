@@ -1,0 +1,7 @@
+
+python act/check_cameras.py
+
+
+python act/check_xlerobot_ports.py 
+
+通过这两个可以知道端口号 

@@ -64,10 +64,12 @@ def main() -> int:
     task_desc = args.task or CONFIG.task_desc
     eval_dataset_name = args.eval_name or f"{CONFIG.dataset_name}_eval_run"
     eval_repo_id = f"{CONFIG.hf_user}/{eval_dataset_name}" if CONFIG.hf_user else f"local/{eval_dataset_name}"
+    eval_root = CONFIG.dataset_root / eval_repo_id
 
     CONFIG.banner("ACT 真机推理 🤖（仅控右臂）")
     print(f"  checkpoint  : {policy_path}")
     print(f"  评估数据集  : {eval_repo_id}")
+    print(f"  评估路径    : {eval_root}")
     print(f"  评估计划    : {args.num_episodes} × {args.episode_time}s")
     print(f"  task        : {task_desc}")
     print(f"  device      : {device}")
@@ -88,6 +90,7 @@ def main() -> int:
         f"--policy.device={device}",
         "--display_data=true",
         f"--dataset.repo_id={eval_repo_id}",
+        f"--dataset.root={eval_root}",
         f"--dataset.num_episodes={args.num_episodes}",
         f"--dataset.episode_time_s={args.episode_time}",
         f"--dataset.fps={CONFIG.cam_fps}",

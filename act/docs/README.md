@@ -70,12 +70,12 @@ act/
 ├── __init__.py
 ├── config.py                    集中配置（端口/相机/超参）
 ├── config/
-│   └── reset_home.json          右臂固定复位姿态（由脚本生成）
+│   └── reset_home.json          右臂 + 头部固定复位姿态（由脚本生成）
 ├── mirror.py             ⭐    左→右镜像表 + probe 子命令
 ├── calibrate_xlerobot.py        ACT 左右臂标定入口
 ├── teleoperate_self.py          自我遥操作（不录数据）
-├── capture_reset_home.py        保存右臂固定 reset home
-├── test_reset_home.py           测试右臂固定 reset home
+├── capture_reset_home.py        保存右臂 + 头部固定 reset home
+├── test_reset_home.py           测试右臂 + 头部固定 reset home
 ├── record_self_teleop.py  ⭐   数据采集（自写主循环）
 ├── check_cameras.py             相机端口预览
 ├── check_xlerobot_ports.py      串口总线识别

@@ -86,7 +86,7 @@ def main() -> int:
         "--max-relative-target",
         type=float,
         default=None,
-        help="单次 action 相对当前位置最大变化；默认 10.0，可用 MAX_RELATIVE_TARGET 覆盖，<=0 关闭",
+        help="单次 action 相对当前位置最大变化；默认 15.0，可用 MAX_RELATIVE_TARGET 覆盖，<=0 关闭",
     )
     args = parser.parse_args()
 

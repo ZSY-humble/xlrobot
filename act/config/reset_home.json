@@ -2,11 +2,15 @@
   "robot_id": "xlerobot_main",
   "robot_type": "xlerobot_2wheels",
   "right_home": {
-    "right_arm_shoulder_pan.pos": -8.92717306186374,
-    "right_arm_shoulder_lift.pos": -98.97304236200257,
-    "right_arm_elbow_flex.pos": 100.0,
-    "right_arm_wrist_flex.pos": 10.519423832387602,
-    "right_arm_wrist_roll.pos": 1.1477411477411437,
-    "right_arm_gripper.pos": 0.906555090655509
+    "right_arm_shoulder_pan.pos": 0.0,
+    "right_arm_shoulder_lift.pos": -99.57210098416773,
+    "right_arm_elbow_flex.pos": 99.90892531876139,
+    "right_arm_wrist_flex.pos": 7.202095154954151,
+    "right_arm_wrist_roll.pos": 0.219780219780219,
+    "right_arm_gripper.pos": 41.91073919107392
+  },
+  "head_home": {
+    "head_motor_1.pos": -38.903394255874666,
+    "head_motor_2.pos": 71.74721189591077
   }
 }

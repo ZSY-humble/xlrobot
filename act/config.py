@@ -50,12 +50,15 @@ class Config:
     cam_fps: int = int(_env("CAM_FPS", "30"))
 
     # ===== 真机安全 =====
-    max_relative_target: float = float(_env("MAX_RELATIVE_TARGET", "10.0"))
+    max_relative_target: float = float(_env("MAX_RELATIVE_TARGET", "15.0"))
     """单次发送 action 相对当前位置的最大变化；<=0 表示关闭限幅。"""
 
     # ===== 数据集 =====
     hf_user: str = field(default_factory=lambda: _env("HF_USER", ""))
     dataset_name: str = field(default_factory=lambda: _env("DATASET_NAME", "xlerobot_act_self_teleop"))
+    dataset_root: Path = field(default_factory=lambda: Path(_env("DATASET_ROOT", "dataset")))
+    """本地数据集根目录；默认写入项目内 dataset/，环境变量 DATASET_ROOT。"""
+
     num_episodes: int = int(_env("NUM_EPISODES", "50"))
     episode_time_s: int = int(_env("EPISODE_TIME_S", "0"))
     """单段最大时长；0 表示手动按键结束。"""
@@ -94,6 +97,10 @@ class Config:
         return Path("outputs/train") / self.job_name
 
     @property
+    def dataset_path(self) -> Path:
+        return self.dataset_root / self.repo_id
+
+    @property
     def policy_path(self) -> Path:
         custom = os.environ.get("POLICY_PATH")
         if custom:
@@ -122,6 +129,7 @@ if __name__ == "__main__":
     episode_desc = "手动结束" if CONFIG.episode_time_s <= 0 else f"最多 {CONFIG.episode_time_s}s"
     reset_desc = "右臂回 home 后手动继续" if CONFIG.reset_time_s <= 0 else f"右臂回 home 后等待 {CONFIG.reset_time_s}s"
     print(f"  数据集 repo_id  : {CONFIG.repo_id}")
+    print(f"  数据集根目录    : {CONFIG.dataset_root}")
     print(f"  采集计划        : {CONFIG.num_episodes} 段，每段{episode_desc}，复位 {reset_desc}")
     print(f"  右臂 home 文件  : {CONFIG.reset_home_path}")
     print(f"  任务描述        : {CONFIG.task_desc}")

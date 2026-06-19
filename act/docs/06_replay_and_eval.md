@@ -12,11 +12,12 @@
 
 ```bash
 lerobot-replay \
-  --robot.type=xlerobot \
+  --robot.type=xlerobot_2wheels \
   --robot.port1=/dev/ttyACM0 \
   --robot.port2=/dev/ttyACM1 \
   --robot.id=xlerobot_main \
   --dataset.repo_id=${HF_USER}/xlerobot_act_self_teleop \
+  --dataset.root=dataset/${HF_USER}/xlerobot_act_self_teleop \
   --dataset.episode=0
 ```
 
@@ -46,7 +47,7 @@ python act/eval_act.py --task="新任务描述（必须与训练一致）"
 ### 命令展开（脚本内部）
 ```bash
 lerobot-record \
-  --robot.type=xlerobot \
+  --robot.type=xlerobot_2wheels \
   --robot.port1=/dev/ttyACM0 \
   --robot.port2=/dev/ttyACM1 \
   --robot.id=xlerobot_main \
@@ -58,6 +59,7 @@ lerobot-record \
   --policy.device=cuda \
   --display_data=true \
   --dataset.repo_id=${HF_USER}/xlerobot_act_self_teleop_eval_run \
+  --dataset.root=dataset/${HF_USER}/xlerobot_act_self_teleop_eval_run \
   ...
 ```
 

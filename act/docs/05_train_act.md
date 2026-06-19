@@ -23,6 +23,7 @@ python act/train_act.py --wandb                        # 启用 wandb
 lerobot-train \
   --policy.type=act \
   --dataset.repo_id=${HF_USER}/xlerobot_act_self_teleop \
+  --dataset.root=dataset/${HF_USER}/xlerobot_act_self_teleop \
   --output_dir=outputs/train/act_xlerobot_self_teleop \
   --job_name=act_xlerobot_self_teleop \
   --policy.device=cuda \

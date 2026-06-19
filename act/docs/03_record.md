@@ -104,7 +104,7 @@ python act/record_self_teleop.py
 ## 📁 六、采集结果在哪
 
 ```
-~/.cache/huggingface/lerobot/${HF_USER}/xlerobot_act_self_teleop/
+dataset/${HF_USER}/xlerobot_act_self_teleop/
 ├── meta/                # features / episodes / stats
 ├── data/chunk-000/      # parquet（关节 / action）
 └── videos/chunk-000/    # 两路相机视频（默认 libsvtav1）

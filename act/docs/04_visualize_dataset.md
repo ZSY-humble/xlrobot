@@ -9,6 +9,7 @@
 ```bash
 lerobot-dataset-viz \
   --repo-id=${HF_USER}/xlerobot_act_self_teleop \
+  --root=dataset/${HF_USER}/xlerobot_act_self_teleop \
   --episode-index=0
 ```
 
@@ -25,6 +26,7 @@ lerobot-dataset-viz \
 ```bash
 lerobot-dataset-viz \
   --repo-id=${HF_USER}/xlerobot_act_self_teleop \
+  --root=dataset/${HF_USER}/xlerobot_act_self_teleop \
   --episode-index=0 \
   --mode=html
 ```
@@ -39,6 +41,7 @@ lerobot-dataset-viz \
 ```bash
 lerobot-edit-dataset \
   --repo-id=${HF_USER}/xlerobot_act_self_teleop \
+  --root=dataset/${HF_USER}/xlerobot_act_self_teleop \
   --operation.type=info \
   --operation.show_features=true
 ```
@@ -99,7 +102,7 @@ lerobot-edit-dataset --help
 ```bash
 huggingface-cli upload \
   ${HF_USER}/xlerobot_act_self_teleop \
-  ~/.cache/huggingface/lerobot/${HF_USER}/xlerobot_act_self_teleop \
+  dataset/${HF_USER}/xlerobot_act_self_teleop \
   --repo-type=dataset
 ```
 

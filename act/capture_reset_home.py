@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""采集并保存 XLeRobot 右臂固定复位姿态。
+"""采集并保存 XLeRobot 右臂与头部固定复位姿态。
 
 用法：
-  1. 先通过遥操作或手动流程把右臂放到每段采集希望回到的初始姿态
-  2. 运行本脚本保存当前右臂 6 关节位置
+  1. 先通过遥操作或手动流程把右臂、头部相机放到希望回到的初始姿态
+  2. 运行本脚本保存当前右臂 6 关节位置 + 头部 2 关节位置
   3. record_self_teleop.py 会自动读取这个 JSON 作为 reset home
 
 示例：
@@ -27,7 +27,7 @@ from lerobot.robots.xlerobot_2wheels import XLerobot2Wheels, XLerobot2WheelsConf
 from lerobot.utils.utils import init_logging
 
 from act.config import CONFIG
-from act.mirror import extract_right_arm
+from act.mirror import extract_head, extract_right_arm
 
 
 def _build_robot() -> XLerobot2Wheels:
@@ -49,13 +49,13 @@ def _disconnect_quietly(robot: XLerobot2Wheels) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="保存 XLeRobot 右臂固定 reset home")
+    parser = argparse.ArgumentParser(description="保存 XLeRobot 右臂 + 头部固定 reset home")
     parser.add_argument("--output", type=Path, default=CONFIG.reset_home_path, help="输出 JSON 路径")
     args = parser.parse_args()
 
     init_logging()
-    CONFIG.banner("采集右臂 reset home")
-    print("请确认右臂已经处在每段采集希望回到的初始姿态。")
+    CONFIG.banner("采集右臂 + 头部 reset home")
+    print("请确认右臂、头部相机已经处在每段采集希望回到的初始姿态。")
     print("本脚本只读取当前位置，不会关闭扭矩，也不会主动移动电机。")
     print()
     input("确认姿态正确后按回车读取并保存 ... ")
@@ -65,6 +65,7 @@ def main() -> int:
         robot.connect()
         obs = robot.get_observation()
         right_home = extract_right_arm(obs)
+        head_home = extract_head(obs)
     finally:
         _disconnect_quietly(robot)
 
@@ -73,13 +74,18 @@ def main() -> int:
         "robot_id": CONFIG.follower_id,
         "robot_type": "xlerobot_2wheels",
         "right_home": {key: float(value) for key, value in right_home.items()},
+        "head_home": {key: float(value) for key, value in head_home.items()},
     }
     args.output.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
-    print("\n✅ 已保存右臂 reset home：")
+    print("\n✅ 已保存右臂 + 头部 reset home：")
     print(f"   {args.output}")
+    print("  right_home:")
     for key, value in payload["right_home"].items():
-        print(f"   {key}: {value:.3f}")
+        print(f"    {key}: {value:.3f}")
+    print("  head_home:")
+    for key, value in payload["head_home"].items():
+        print(f"    {key}: {value:.3f}")
     print("\n采集脚本会默认读取该文件：")
     print("   python act/record_self_teleop.py --num-episodes 3 --task \"...\"")
     return 0

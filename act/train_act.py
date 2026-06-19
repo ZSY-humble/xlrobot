@@ -49,6 +49,7 @@ def main() -> int:
 
     CONFIG.banner("启动 ACT 训练 🚀")
     print(f"  数据集     : {CONFIG.repo_id}")
+    print(f"  数据路径   : {CONFIG.dataset_path}")
     print(f"  输出目录   : {CONFIG.output_dir}")
     print(f"  steps      : {steps}")
     print(f"  batch_size : {batch_size}")
@@ -62,6 +63,7 @@ def main() -> int:
         "lerobot-train",
         "--policy.type=act",
         f"--dataset.repo_id={CONFIG.repo_id}",
+        f"--dataset.root={CONFIG.dataset_path}",
         f"--output_dir={CONFIG.output_dir}",
         f"--job_name={CONFIG.job_name}",
         f"--policy.device={device}",

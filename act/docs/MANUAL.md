@@ -262,7 +262,7 @@ python act/teleoperate_self.py --hz 30
 - 启动前先用手扶住左臂。
 - 脚本会关闭左臂扭矩，左臂可能因重力下垂。
 - 右臂、头部保持上电，不要强行掰。
-- `max_relative_target` 默认是 `10.0`；如需临时更保守，可手动加
+- `max_relative_target` 默认是 `15.0`；如需临时更保守，可手动加
   `--max-relative-target 5.0`。
 
 ---
@@ -324,7 +324,7 @@ python act/record_self_teleop.py --no-display
 
 ```bash
 python act/record_self_teleop.py \
-  --root ~/.cache/huggingface/lerobot/${HF_USER}/xlerobot_act_self_teleop
+  --root dataset/${HF_USER}/xlerobot_act_self_teleop
 ```
 
 采完上传 Hub：
@@ -385,7 +385,7 @@ python act/record_self_teleop.py --no-display
 默认本地路径：
 
 ```text
-~/.cache/huggingface/lerobot/local/xlerobot_act_self_teleop/
+dataset/local/xlerobot_act_self_teleop/
 ```
 
 用 LeRobot 可视化工具回看：
@@ -393,6 +393,7 @@ python act/record_self_teleop.py --no-display
 ```bash
 lerobot-dataset-viz \
   --repo-id local/xlerobot_act_self_teleop \
+  --root dataset/local/xlerobot_act_self_teleop \
   --episode-index 0
 ```
 
@@ -574,14 +575,14 @@ export CAM_RIGHT_WRIST=/dev/videoY
 
 ```bash
 python act/record_self_teleop.py --resume \
-  --root ~/.cache/huggingface/lerobot/local/xlerobot_act_self_teleop
+  --root dataset/local/xlerobot_act_self_teleop
 ```
 
 如果你设置了 `HF_USER`，则是：
 
 ```bash
 python act/record_self_teleop.py --resume \
-  --root ~/.cache/huggingface/lerobot/${HF_USER}/xlerobot_act_self_teleop
+  --root dataset/${HF_USER}/xlerobot_act_self_teleop
 ```
 
 ### 训练启动报找不到数据集
@@ -590,7 +591,7 @@ python act/record_self_teleop.py --resume \
 
 ```bash
 python -m act.config
-ls ~/.cache/huggingface/lerobot/local/xlerobot_act_self_teleop
+ls dataset/local/xlerobot_act_self_teleop
 ```
 
 ---
