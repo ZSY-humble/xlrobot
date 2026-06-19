@@ -25,7 +25,7 @@ pip install -e .
 | 角色 | 默认端口 | XLeRobot 字段 | 说明 |
 |---|---|---|---|
 | **bus1** | `/dev/ttyACM0` | `--robot.port1` | **左臂 6 个电机 + 头部 2 个电机** |
-| **bus2** | `/dev/ttyACM1` | `--robot.port2` | **右臂 6 个电机 + 底盘 3 个轮子** |
+| **bus2** | `/dev/ttyACM1` | `--robot.port2` | **右臂 6 个电机 + 两轮底盘 2 个电机** |
 
 > 💡 你只需要把 XLeRobot 自身的两根总线插上电脑，**不需要任何额外的主臂 USB**。
 

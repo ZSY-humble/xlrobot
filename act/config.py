@@ -57,8 +57,17 @@ class Config:
     hf_user: str = field(default_factory=lambda: _env("HF_USER", ""))
     dataset_name: str = field(default_factory=lambda: _env("DATASET_NAME", "xlerobot_act_self_teleop"))
     num_episodes: int = int(_env("NUM_EPISODES", "50"))
-    episode_time_s: int = int(_env("EPISODE_TIME_S", "20"))
-    reset_time_s: int = int(_env("RESET_TIME_S", "10"))
+    episode_time_s: int = int(_env("EPISODE_TIME_S", "0"))
+    """单段最大时长；0 表示手动按键结束。"""
+
+    reset_time_s: int = int(_env("RESET_TIME_S", "0"))
+    """段间复位倒计时；0 表示手动按回车继续。"""
+
+    reset_home_path: Path = field(
+        default_factory=lambda: Path(_env("RESET_HOME_PATH", "act/config/reset_home.json"))
+    )
+    """右臂固定复位姿态 JSON；环境变量 RESET_HOME_PATH。"""
+
     task_desc: str = field(
         default_factory=lambda: _env("TASK_DESC", "Pick up the red cube and place it into the box")
     )
@@ -102,7 +111,6 @@ class Config:
         print(f"  相机 top        : {self.cam_top}")
         print(f"  相机 right_wrist: {self.cam_right_wrist}")
         print(f"  分辨率/帧率     : {self.cam_width}x{self.cam_height} @ {self.cam_fps}fps")
-        print(f"  安全限幅         : max_relative_target={self.max_relative_target}")
         print(f"{'=' * 60}\n")
 
 
@@ -111,8 +119,11 @@ CONFIG = Config()
 
 if __name__ == "__main__":
     CONFIG.banner("当前配置 —— 自我遥操作 ACT 工作流")
+    episode_desc = "手动结束" if CONFIG.episode_time_s <= 0 else f"最多 {CONFIG.episode_time_s}s"
+    reset_desc = "右臂回 home 后手动继续" if CONFIG.reset_time_s <= 0 else f"右臂回 home 后等待 {CONFIG.reset_time_s}s"
     print(f"  数据集 repo_id  : {CONFIG.repo_id}")
-    print(f"  采集计划        : {CONFIG.num_episodes} × {CONFIG.episode_time_s}s（间隔 {CONFIG.reset_time_s}s）")
+    print(f"  采集计划        : {CONFIG.num_episodes} 段，每段{episode_desc}，复位 {reset_desc}")
+    print(f"  右臂 home 文件  : {CONFIG.reset_home_path}")
     print(f"  任务描述        : {CONFIG.task_desc}")
     print(f"  训练 steps      : {CONFIG.steps}, batch_size={CONFIG.batch_size}, device={CONFIG.train_device}")
     print(f"  输出目录        : {CONFIG.output_dir}")

@@ -177,39 +177,31 @@ class XLerobot2Wheels(Robot):
         self.bus1.connect()
         self.bus2.connect()
         
-        # Check if calibration file exists and ask user if they want to restore it
+        # 有标定文件时直接恢复。需要重新标定时，显式运行 act/calibrate_xlerobot.py。
         if self.calibration_fpath.is_file():
             logger.info(f"Calibration file found at {self.calibration_fpath}")
-            user_input = input(
-                f"Press ENTER to restore calibration from file, or type 'c' and press ENTER to run manual calibration: "
-            )
-            if user_input.strip().lower() != "c":
-                logger.info("Attempting to restore calibration from file...")
-                try:
-                    # Load calibration data into bus memory
-                    self.bus1.calibration = {k: v for k, v in self.calibration.items() if k in self.bus1.motors}
-                    self.bus2.calibration = {k: v for k, v in self.calibration.items() if k in self.bus2.motors}
-                    logger.info("Calibration data loaded into bus memory successfully!")
-                    
-                    # Write calibration data to motors
-                    self.bus1.write_calibration(
-                        {k: v for k, v in self.calibration.items() if k in self.bus1.motors},
-                        num_retry=num_retry,
-                    )
-                    self.bus2.write_calibration(
-                        {k: v for k, v in self.calibration.items() if k in self.bus2.motors},
-                        num_retry=num_retry,
-                    )
-                    logger.info("Calibration restored successfully from file!")
-                    
-                except Exception as e:
-                    logger.warning(f"Failed to restore calibration from file: {e}")
-                    if calibrate:
-                        logger.info("Proceeding with manual calibration...")
-                        self.calibrate()
-            else:
-                logger.info("User chose manual calibration...")
+            logger.info("Restoring calibration from file...")
+            try:
+                # Load calibration data into bus memory
+                self.bus1.calibration = {k: v for k, v in self.calibration.items() if k in self.bus1.motors}
+                self.bus2.calibration = {k: v for k, v in self.calibration.items() if k in self.bus2.motors}
+                logger.info("Calibration data loaded into bus memory successfully!")
+
+                # Write calibration data to motors
+                self.bus1.write_calibration(
+                    {k: v for k, v in self.calibration.items() if k in self.bus1.motors},
+                    num_retry=num_retry,
+                )
+                self.bus2.write_calibration(
+                    {k: v for k, v in self.calibration.items() if k in self.bus2.motors},
+                    num_retry=num_retry,
+                )
+                logger.info("Calibration restored successfully from file!")
+
+            except Exception as e:
+                logger.warning(f"Failed to restore calibration from file: {e}")
                 if calibrate:
+                    logger.info("Proceeding with manual calibration...")
                     self.calibrate()
         elif calibrate:
             logger.info("No calibration file found, proceeding with manual calibration...")

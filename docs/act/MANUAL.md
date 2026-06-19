@@ -248,7 +248,7 @@ python act/teleoperate_self.py --no-display
 如果只验证关节、不连相机：
 
 ```bash
-python act/teleoperate_self.py --no-cameras --no-display --max-relative-target 5.0
+python act/teleoperate_self.py --no-cameras --no-display
 ```
 
 调控制频率：
@@ -262,7 +262,8 @@ python act/teleoperate_self.py --hz 30
 - 启动前先用手扶住左臂。
 - 脚本会关闭左臂扭矩，左臂可能因重力下垂。
 - 右臂、头部保持上电，不要强行掰。
-- 第一次真机验证建议使用 `--max-relative-target 5.0`。
+- `max_relative_target` 默认是 `10.0`；如需临时更保守，可手动加
+  `--max-relative-target 5.0`。
 
 ---
 
@@ -282,10 +283,30 @@ python act/record_self_teleop.py
 ```bash
 python act/record_self_teleop.py \
   --num-episodes 50 \
-  --episode-time 20 \
-  --reset-time 10 \
   --task "Pick up the red cube and place it into the box"
 ```
+
+正式采集前先保存固定右臂复位姿态：
+
+```bash
+python act/capture_reset_home.py
+python act/test_reset_home.py --dry-run
+python act/test_reset_home.py
+```
+
+默认固定 home 文件：
+
+```text
+act/config/reset_home.json
+```
+
+每一段开始前都会先让右臂回到固定 home，并等待你在终端按回车：
+
+```text
+右臂已回 home，摆好物体后按回车开始第 N 段 ...
+```
+
+每段不会按时间自动结束，除非你显式设置 `--episode-time`。结束由热键决定。
 
 续采：
 
@@ -321,15 +342,15 @@ python act/record_self_teleop.py --push-to-hub
 
 注意：实时采集阶段仍然会先在本地写一份数据集，再执行上传；上传成功后可以再清理本地缓存。
 
-采集按键：
+采集热键：
 
 | 按键 | 作用 |
 |---|---|
-| 右箭头 | 当前 episode 成功，提前结束并保存 |
-| 左箭头 | 当前 episode 失败，丢弃并重录 |
-| Esc | 停止整体采集 |
+| `→` 或 `s` | 当前 episode 成功，结束并保存 |
+| `←` 或 `r` | 当前 episode 失败，丢弃并重录 |
+| `Esc` 或 `q` | 停止整体采集 |
 
-⚠️ 按键监听需要本地物理终端。SSH/headless 环境下可能收不到箭头键。
+⚠️ 开始每一段使用终端 `Enter`；结束当前段使用上面的全局热键。按键监听需要本地物理终端，SSH/headless 环境下可能收不到。
 
 ---
 
@@ -479,11 +500,13 @@ export CAM_RIGHT_WRIST=/dev/video4
 python -m act.config
 python act/calibrate_xlerobot.py
 python -m act.mirror show
-python act/teleoperate_self.py --no-cameras --no-display --max-relative-target 5.0
+python act/teleoperate_self.py --no-cameras --no-display
 python act/teleoperate_self.py
-python act/record_self_teleop.py --num-episodes 3 --episode-time 10
+python act/capture_reset_home.py
+python act/test_reset_home.py
+python act/record_self_teleop.py --num-episodes 3
 lerobot-dataset-viz --repo-id local/xlerobot_act_self_teleop --episode-index 0
-python act/record_self_teleop.py --num-episodes 50 --episode-time 20
+python act/record_self_teleop.py --num-episodes 50 --resume
 python act/train_act.py
 ```
 

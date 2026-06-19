@@ -5,7 +5,7 @@
 🎯 主流程：
   1. 连 XLeRobot，关左臂扭矩
   2. 主循环：读左臂 → 镜像 → 写右臂；同时录入 right_arm/head/相机/action 到数据集
-  3. → 保存当前段 / ← 重录 / Esc 停止
+  3. →/s 保存当前段，←/r 重录，Esc/q 停止
 
 数据集 schema：
   observation.state              float32 (6,)  右臂 6 关节
@@ -21,15 +21,16 @@
     python act/record_self_teleop.py --resume
     python act/record_self_teleop.py --num-episodes=80 --task="..."
 
-⌨️ 三键（必须本地物理终端）：
-    →  本段成功，保存
-    ←  本段失败，丢弃重录
-    Esc 整体停止
+⌨️ 热键（必须本地物理终端）：
+    → 或 s    本段成功，保存
+    ← 或 r    本段失败，丢弃重录
+    Esc 或 q  整体停止
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
@@ -45,7 +46,7 @@ from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.video_utils import VideoEncodingManager
 from lerobot.robots.xlerobot_2wheels import XLerobot2Wheels, XLerobot2WheelsConfig
 from lerobot.utils.constants import HF_LEROBOT_HOME
-from lerobot.utils.control_utils import init_keyboard_listener
+from lerobot.utils.control_utils import is_headless
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.utils import init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
@@ -153,6 +154,42 @@ def _disconnect_quietly(robot: XLerobot2Wheels) -> None:
         logging.warning(f"断开机器人时忽略异常：{exc}")
 
 
+def _init_record_keyboard_listener():
+    """录制热键：方向键和字母键都支持，降低现场键盘兼容风险。"""
+    events = {
+        "exit_early": False,
+        "rerecord_episode": False,
+        "stop_recording": False,
+    }
+
+    if is_headless():
+        logging.warning("Headless 环境下无法监听键盘；请在本地物理终端运行采集。")
+        return None, events
+
+    from pynput import keyboard
+
+    def on_press(key):
+        try:
+            char = getattr(key, "char", None)
+            if key == keyboard.Key.right or char == "s":
+                print("保存当前 episode：→ / s")
+                events["exit_early"] = True
+            elif key == keyboard.Key.left or char == "r":
+                print("丢弃并重录当前 episode：← / r")
+                events["rerecord_episode"] = True
+                events["exit_early"] = True
+            elif key == keyboard.Key.esc or char == "q":
+                print("停止整体采集：Esc / q")
+                events["stop_recording"] = True
+                events["exit_early"] = True
+        except Exception as exc:  # noqa: BLE001 - 键盘回调不能让线程崩掉
+            print(f"处理按键失败：{exc}")
+
+    listener = keyboard.Listener(on_press=on_press)
+    listener.start()
+    return listener, events
+
+
 def _build_state_vector(obs: dict) -> np.ndarray:
     """从 robot.get_observation() 输出里抽出 state 向量。"""
     return np.array([float(obs[k]) for k in STATE_NAMES], dtype=np.float32)
@@ -160,6 +197,80 @@ def _build_state_vector(obs: dict) -> np.ndarray:
 
 def _build_action_vector(right_target: dict[str, float]) -> np.ndarray:
     return np.array([float(right_target[k]) for k in ACTION_NAMES], dtype=np.float32)
+
+
+def _load_reset_home_from_file(path: Path) -> dict[str, float] | None:
+    if not path.exists():
+        return None
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    raw_home = payload.get("right_home", payload)
+    missing = [name for name in ACTION_NAMES if name not in raw_home]
+    if missing:
+        raise ValueError(f"reset home 文件缺少字段：{missing}，文件：{path}")
+    return {name: float(raw_home[name]) for name in ACTION_NAMES}
+
+
+def _max_abs_right_error(obs: dict, right_target: dict[str, float]) -> float:
+    return max(abs(float(obs[k]) - float(right_target[k])) for k in ACTION_NAMES)
+
+
+def _log_preview_frame(robot: XLerobot2Wheels, action: dict[str, float], display_data: bool) -> None:
+    """等待操作者按回车前写一帧预览，避免 Rerun 空白。"""
+    if not display_data:
+        return
+    obs = robot.get_observation()
+    log_rerun_data(observation=obs, action=action)
+
+
+def _move_right_arm_to_home(
+    robot: XLerobot2Wheels,
+    right_home: dict[str, float],
+    fps: int,
+    max_relative_target: float | None,
+    display_data: bool,
+    timeout_s: float = 12.0,
+    tolerance: float = 2.0,
+) -> None:
+    """复位阶段：只把右臂慢速送回固定 home，不写数据集。"""
+    period = 1.0 / fps
+    step_limit = max_relative_target if max_relative_target is not None else CONFIG.max_relative_target
+    if step_limit <= 0:
+        step_limit = 10.0
+
+    log_say("Reset: moving right arm to fixed home", play_sounds=False)
+    t_start = time.perf_counter()
+    last_error = float("inf")
+
+    while True:
+        t0 = time.perf_counter()
+        obs = robot.get_observation()
+        last_error = _max_abs_right_error(obs, right_home)
+        if last_error <= tolerance:
+            if display_data:
+                log_rerun_data(observation=obs, action=right_home)
+            break
+
+        action_to_send = limit_action_relative_to_observation(
+            right_home,
+            obs,
+            step_limit,
+        )
+        sent_action = robot.send_action(action_to_send)
+        if display_data:
+            log_rerun_data(observation=obs, action=sent_action)
+
+        if (time.perf_counter() - t_start) >= timeout_s:
+            logging.warning(
+                "右臂复位超时：未完全到达 home，当前最大误差 %.2f，将继续进入人工复位阶段",
+                last_error,
+            )
+            break
+
+        elapsed = time.perf_counter() - t0
+        precise_sleep(max(period - elapsed, 0.0))
+
+    logging.info("✅ 右臂 home 复位结束，最大误差 %.2f", last_error)
 
 
 def _record_episode(
@@ -221,7 +332,7 @@ def _record_episode(
         if events["exit_early"]:
             events["exit_early"] = False
             break
-        if (time.perf_counter() - t_start) >= episode_time_s:
+        if episode_time_s > 0 and (time.perf_counter() - t_start) >= episode_time_s:
             break
 
         elapsed = time.perf_counter() - t0
@@ -232,8 +343,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="XLeRobot 自我遥操作 ACT 数据采集")
     parser.add_argument("--resume", action="store_true", help="继续追加到已有数据集")
     parser.add_argument("--num-episodes", type=int, default=None)
-    parser.add_argument("--episode-time", type=int, default=None)
-    parser.add_argument("--reset-time", type=int, default=None)
+    parser.add_argument(
+        "--episode-time",
+        type=int,
+        default=None,
+        help="单段最大秒数；默认 0=手动按 →/s、←/r、Esc/q 结束",
+    )
+    parser.add_argument("--reset-time", type=int, default=None, help="段间复位秒数；默认 0=手动按回车继续")
     parser.add_argument("--task", type=str, default=None)
     parser.add_argument("--push-to-hub", action="store_true")
     parser.add_argument("--no-display", action="store_true")
@@ -247,15 +363,15 @@ def main() -> int:
         "--max-relative-target",
         type=float,
         default=None,
-        help="单次 action 相对当前位置最大变化；默认读取 MAX_RELATIVE_TARGET，<=0 关闭",
+        help="单次 action 相对当前位置最大变化；默认 10.0，可用 MAX_RELATIVE_TARGET 覆盖，<=0 关闭",
     )
     args = parser.parse_args()
 
     init_logging()
 
     num_episodes = args.num_episodes or CONFIG.num_episodes
-    episode_time_s = args.episode_time or CONFIG.episode_time_s
-    reset_time_s = args.reset_time or CONFIG.reset_time_s
+    episode_time_s = CONFIG.episode_time_s if args.episode_time is None else args.episode_time
+    reset_time_s = CONFIG.reset_time_s if args.reset_time is None else args.reset_time
     task = args.task or CONFIG.task_desc
     push_to_hub = args.push_to_hub or CONFIG.push_to_hub
     display_data = not args.no_display
@@ -274,7 +390,9 @@ def main() -> int:
 
     CONFIG.banner("XLeRobot 自我遥操作数据采集 ⭐")
     print(f"  数据集     : {CONFIG.repo_id}")
-    print(f"  采集计划   : {num_episodes} × {episode_time_s}s（reset {reset_time_s}s）")
+    episode_desc = "手动结束" if episode_time_s <= 0 else f"最多 {episode_time_s}s"
+    reset_desc = "右臂回 home 后手动继续" if reset_time_s <= 0 else f"右臂回 home 后等待 {reset_time_s}s"
+    print(f"  采集计划   : {num_episodes} 段，每段{episode_desc}，复位 {reset_desc}")
     print(f"  task       : {task}")
     print(f"  root       : {dataset_root}")
     print(f"  push hub   : {push_to_hub}")
@@ -282,12 +400,11 @@ def main() -> int:
     print(f"  Rerun      : {display_data}")
     print(f"  跟随模式   : {'absolute' if args.absolute else 'delta'}")
     print(f"  镜像取反   : {set(NEGATE_JOINTS)}")
-    print(f"  安全限幅   : {max_relative_target}")
     print()
-    print("⌨️  三键（务必本地物理终端）：→ 保存 / ← 重录 / Esc 停止")
+    print("⌨️  热键（务必本地物理终端）：→ 或 s 保存 / ← 或 r 重录 / Esc 或 q 停止")
     print("⚠️  即将关闭左臂扭矩 —— 请先用手扶住左臂！")
     print()
-    input("准备好按回车开始 ... ")
+    input("准备好按回车连接机器人 ... ")
 
     # 1. 机器人
     robot = _build_robot()
@@ -299,6 +416,18 @@ def main() -> int:
     robot.bus1.disable_torque(robot.left_arm_motors)
     logging.info(f"✅ 左臂扭矩关闭：{robot.left_arm_motors}")
     logging.info("ℹ️  头部 / 底盘电机扭矩保持开启，不主动控制（自然伺服锁位）")
+
+    right_reset_home = _load_reset_home_from_file(CONFIG.reset_home_path)
+    if right_reset_home is None:
+        reset_home_obs = robot.get_observation()
+        right_reset_home = extract_right_arm(reset_home_obs)
+        logging.warning(
+            "未找到固定 reset home 文件 %s；本次退回使用启动时右臂当前姿态。"
+            "建议先运行：python act/capture_reset_home.py",
+            CONFIG.reset_home_path,
+        )
+    else:
+        logging.info("✅ 已加载固定右臂 reset home：%s", CONFIG.reset_home_path)
 
     # 2. 数据集
     features = _make_features()
@@ -322,7 +451,7 @@ def main() -> int:
         )
 
     # 3. 键盘 + Rerun
-    listener, events = init_keyboard_listener()
+    listener, events = _init_record_keyboard_listener()
     if display_data:
         init_rerun(session_name="self_teleop_record")
 
@@ -330,6 +459,16 @@ def main() -> int:
     try:
         with VideoEncodingManager(dataset):
             recorded = 0
+            _move_right_arm_to_home(
+                robot=robot,
+                right_home=right_reset_home,
+                fps=fps,
+                max_relative_target=max_relative_target,
+                display_data=display_data,
+            )
+            _log_preview_frame(robot, right_reset_home, display_data)
+            input(f"右臂已回 home，摆好物体后按回车开始第 {dataset.num_episodes} 段 ... ")
+
             while recorded < num_episodes and not events["stop_recording"]:
                 log_say(f"Recording episode {dataset.num_episodes}", play_sounds=False)
                 origin_obs = robot.get_observation()
@@ -360,17 +499,32 @@ def main() -> int:
                     dataset.save_episode()
                     recorded += 1
 
-                # reset 间隔（除非已停或最后一段）
+                # 每段结束后先回固定 home。这个过程不写入数据集。
+                if not events["stop_recording"]:
+                    _move_right_arm_to_home(
+                        robot=robot,
+                        right_home=right_reset_home,
+                        fps=fps,
+                        max_relative_target=max_relative_target,
+                        display_data=display_data,
+                    )
+
+                # 段间复位：物体/场景由操作者手动摆好，再进入下一段。
                 if not events["stop_recording"] and recorded < num_episodes:
-                    log_say(f"Reset: please reposition objects ({reset_time_s}s)", play_sounds=False)
-                    t0 = time.perf_counter()
-                    while time.perf_counter() - t0 < reset_time_s and not events["exit_early"]:
-                        # reset 期间锁住右臂当前位置（防右臂下垂）；头部不动
-                        obs = robot.get_observation()
-                        right_lock = extract_right_arm(obs)
-                        robot.send_action(right_lock)
-                        precise_sleep(1.0 / fps)
-                    events["exit_early"] = False
+                    if reset_time_s > 0:
+                        log_say(f"Reset: please reposition objects ({reset_time_s}s)", play_sounds=False)
+                        t0 = time.perf_counter()
+                        while time.perf_counter() - t0 < reset_time_s and not events["exit_early"]:
+                            # reset 期间锁住右臂当前位置（防右臂下垂）；头部不动
+                            obs = robot.get_observation()
+                            right_lock = extract_right_arm(obs)
+                            robot.send_action(right_lock)
+                            precise_sleep(1.0 / fps)
+                        events["exit_early"] = False
+                    else:
+                        log_say("Reset: reposition objects, then press ENTER", play_sounds=False)
+                        _log_preview_frame(robot, right_reset_home, display_data)
+                        input(f"复位好后按回车开始第 {dataset.num_episodes} 段 ... ")
 
         # 5. 收尾
         dataset.finalize()

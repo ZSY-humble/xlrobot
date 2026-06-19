@@ -54,7 +54,7 @@
 
 | 现象 | 解决 |
 |---|---|
-| `→` `←` `Esc` 全没反应 | 必须本地物理终端，不能 SSH |
+| `→/s` `←/r` `Esc/q` 全没反应 | 必须本地物理终端，不能 SSH |
 | 偶尔响应 | 必要时 `sudo` 启动 |
 | 报 `pynput` 相关错 | `pip install pynput` |
 | 在 docker 里没反应 | 容器要挂载 `/dev/input` 并 `--privileged` |
@@ -135,7 +135,7 @@ fuser -k /dev/ttyACM0   # 强杀占用进程
 1. 看终端完整报错（往上翻所有 traceback）
 2. 翻当前 docs：[README.md](README.md)
 3. 查源码：
-   - XLeRobot：[../../src/lerobot/robots/xlerobot/xlerobot.py](../../src/lerobot/robots/xlerobot/xlerobot.py)
+   - XLeRobot 两轮版：[../../src/lerobot/robots/xlerobot_2wheels/xlerobot_2wheels.py](../../src/lerobot/robots/xlerobot_2wheels/xlerobot_2wheels.py)
    - 录制脚本：[../../act/record_self_teleop.py](../../act/record_self_teleop.py)
    - 镜像表：[../../act/mirror.py](../../act/mirror.py)
 4. 把报错粘给阿宇 👋

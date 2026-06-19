@@ -16,7 +16,7 @@
 | **左臂**（leader / 主推） | XLeRobot port1 总线 | ❌ **关闭**（人手才能推动） | 你用手推 → 关节角作为右臂目标 |
 | **右臂**（follower / 跟随） | XLeRobot port2 总线 | ✅ 开启 | 实时跟随左臂；其状态 + 动作被录到数据集 |
 | **头部** 2 个电机 | port1 总线（与左臂同 bus） | ✅ 开启（伺服锁位） | 不录、不主动控制（保持当前姿态即可） |
-| **底盘** 3 个轮子 | port2 总线（与右臂同 bus） | — | 本任务**不用** |
+| **两轮底盘** 2 个电机 | port2 总线（与右臂同 bus） | ✅ 开启（自然锁位/停止） | 本任务**不用** |
 
 ---
 
@@ -52,6 +52,7 @@
 ```
 docs/act/
 ├── README.md                    👈 本文件，工作流总览
+├── MANUAL.md                    当前实测版完整手册
 ├── PROPOSAL_self_teleop.md      方案设计说明（一次性看清思路）
 ├── 00_env_setup.md              环境与硬件准备
 ├── 01_calibrate.md              XLeRobot 标定
@@ -68,10 +69,17 @@ docs/act/
 act/
 ├── __init__.py
 ├── config.py                    集中配置（端口/相机/超参）
+├── config/
+│   └── reset_home.json          右臂固定复位姿态（由脚本生成）
 ├── mirror.py             ⭐    左→右镜像表 + probe 子命令
-├── calibrate_xlerobot.py        XLeRobot 整机标定入口
+├── calibrate_xlerobot.py        ACT 左右臂标定入口
 ├── teleoperate_self.py          自我遥操作（不录数据）
+├── capture_reset_home.py        保存右臂固定 reset home
+├── test_reset_home.py           测试右臂固定 reset home
 ├── record_self_teleop.py  ⭐   数据采集（自写主循环）
+├── check_cameras.py             相机端口预览
+├── check_xlerobot_ports.py      串口总线识别
+├── setup_udev_rules.py          生成稳定 USB 别名规则
 ├── train_act.py                 ACT 训练
 └── eval_act.py                  真机推理（仅右臂）
 ```
@@ -97,9 +105,9 @@ act/
 
 | 按键 | 作用 |
 |---|---|
-| `→` | 本段成功 → 保存并进入下一段 |
-| `←` | 本段失败 → 丢弃并重录 |
-| `Esc` | 整体停止采集 |
+| `→` 或 `s` | 本段成功 → 保存并进入复位 |
+| `←` 或 `r` | 本段失败 → 丢弃并重录 |
+| `Esc` 或 `q` | 整体停止采集 |
 
 ---
 
@@ -124,7 +132,7 @@ act/
 
 ## 🔗 相关源码
 
-- XLeRobot 机器人类：[../../src/lerobot/robots/xlerobot/xlerobot.py](../../src/lerobot/robots/xlerobot/xlerobot.py)
+- XLeRobot 两轮版机器人类：[../../src/lerobot/robots/xlerobot_2wheels/xlerobot_2wheels.py](../../src/lerobot/robots/xlerobot_2wheels/xlerobot_2wheels.py)
 - 标定脚本（lerobot CLI）：[../../src/lerobot/scripts/lerobot_calibrate.py](../../src/lerobot/scripts/lerobot_calibrate.py)
 - 训练脚本：[../../src/lerobot/scripts/lerobot_train.py](../../src/lerobot/scripts/lerobot_train.py)
 - LeRobotDataset：[../../src/lerobot/datasets/lerobot_dataset.py](../../src/lerobot/datasets/lerobot_dataset.py)

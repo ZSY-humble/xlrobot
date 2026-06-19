@@ -86,7 +86,7 @@ def main() -> int:
         "--max-relative-target",
         type=float,
         default=None,
-        help="单次 action 相对当前位置最大变化；默认读取 MAX_RELATIVE_TARGET，<=0 关闭",
+        help="单次 action 相对当前位置最大变化；默认 10.0，可用 MAX_RELATIVE_TARGET 覆盖，<=0 关闭",
     )
     args = parser.parse_args()
 
@@ -105,7 +105,6 @@ def main() -> int:
     print(f"  相机       : {'OFF' if args.no_cameras else 'top + right_wrist'}")
     print(f"  跟随模式   : {'absolute' if args.absolute else 'delta'}")
     print(f"  镜像取反   : {set(NEGATE_JOINTS)}")
-    print(f"  安全限幅   : {max_relative_target}")
     print()
     print("⚠️  即将关闭左臂扭矩 —— 请先用手扶住左臂！")
     print("   起始位建议：双臂立直、夹爪朝下、远离桌面")
