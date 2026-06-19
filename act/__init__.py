@@ -7,6 +7,7 @@
 - config                集中配置（端口/相机/超参）
 - mirror                左→右臂关节角镜像表 + probe 子命令
 - calibrate_xlerobot    ACT 左右臂标定（默认不标头部/底盘）
+- install_calibration   将仓库内置标定安装到 LeRobot 默认 cache
 - teleoperate_self      自我遥操作（不录数据，调试用）
 - capture_reset_home    保存右臂 + 头部固定 reset home
 - test_reset_home       测试右臂 + 头部是否能回到固定 reset home

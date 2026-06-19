@@ -4,4 +4,10 @@ python act/check_cameras.py
 
 python act/check_xlerobot_ports.py 
 
-通过这两个可以知道端口号 
+通过这两个可以知道端口号  然后知道之后
+
+python act/install_calibration.py --force
+
+python act/record_self_teleop.py \
+  --num-episodes 50 \
+  --task "pick up the object and place it into the target container"
