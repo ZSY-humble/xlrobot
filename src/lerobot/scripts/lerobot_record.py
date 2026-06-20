@@ -68,6 +68,9 @@ lerobot-record \
 """
 
 import logging
+import json
+import select
+import sys
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -229,6 +232,10 @@ class RecordConfig:
     play_sounds: bool = True
     # Resume recording on an existing dataset.
     resume: bool = False
+    # Connect robot/cameras, show observations in Rerun, then wait for Enter before sending actions.
+    wait_before_start: bool = False
+    # Observation preview frequency while waiting for Enter.
+    wait_preview_fps: int = 10
 
     def __post_init__(self):
         # HACK: We parse again the cli args here to get the pretrained path if there was one.
@@ -247,6 +254,71 @@ class RecordConfig:
     def __get_path_fields__(cls) -> list[str]:
         """This enables the parser to load config from the policy using `--policy.path=local/dir`"""
         return ["policy"]
+
+
+def wait_before_start_preview(
+    robot: Robot,
+    robot_observation_processor: RobotProcessorPipeline[RobotObservation, RobotObservation],
+    fps: int,
+    display_data: bool,
+    display_compressed_images: bool,
+) -> None:
+    """连接后先持续显示 observation，按 Enter 后才进入真正控制循环。"""
+    print()
+    print("⚠️  即将启动真机 policy，但当前还不会发送 action。")
+    print("   Rerun 正在显示相机/状态；确认安全后按 Enter 开始执行。")
+    print("   按 Ctrl+C 取消：", end="", flush=True)
+
+    period = 1.0 / max(fps, 1)
+    while True:
+        loop_t = time.perf_counter()
+
+        readable, _, _ = select.select([sys.stdin], [], [], 0.0)
+        if readable:
+            sys.stdin.readline()
+            print()
+            print("✅ 已确认，开始执行 policy。")
+            return
+
+        obs = robot.get_observation()
+        obs_processed = robot_observation_processor(obs)
+        if display_data:
+            log_rerun_data(
+                observation=obs_processed,
+                action=None,
+                compress_images=display_compressed_images,
+            )
+
+        sleep_s = period - (time.perf_counter() - loop_t)
+        if sleep_s > 0:
+            precise_sleep(sleep_s)
+
+
+def get_policy_training_dataset_features(policy_cfg: PreTrainedConfig | None) -> dict[str, dict] | None:
+    """优先复用训练数据集 schema，避免 eval 时把整机 16 维 action 塞给 6 维策略。"""
+    if policy_cfg is None or policy_cfg.pretrained_path is None:
+        return None
+
+    train_config_path = Path(policy_cfg.pretrained_path) / "train_config.json"
+    if not train_config_path.is_file():
+        return None
+
+    train_config = json.loads(train_config_path.read_text())
+    dataset_root = train_config.get("dataset", {}).get("root")
+    if not dataset_root:
+        return None
+
+    info_path = Path(dataset_root) / "meta" / "info.json"
+    if not info_path.is_file():
+        return None
+
+    train_features = json.loads(info_path.read_text())["features"]
+    wanted_keys = set(policy_cfg.input_features) | set(policy_cfg.output_features)
+    return {
+        key: value
+        for key, value in train_features.items()
+        if key in wanted_keys
+    }
 
 
 """ --------------- record_loop() data flow --------------------------
@@ -451,20 +523,24 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
     teleop_action_processor, robot_action_processor, robot_observation_processor = make_default_processors()
 
-    dataset_features = combine_feature_dicts(
-        aggregate_pipeline_dataset_features(
-            pipeline=teleop_action_processor,
-            initial_features=create_initial_features(
-                action=robot.action_features
-            ),  # TODO(steven, pepijn): in future this should be come from teleop or policy
-            use_videos=cfg.dataset.video,
-        ),
-        aggregate_pipeline_dataset_features(
-            pipeline=robot_observation_processor,
-            initial_features=create_initial_features(observation=robot.observation_features),
-            use_videos=cfg.dataset.video,
-        ),
-    )
+    policy_dataset_features = get_policy_training_dataset_features(cfg.policy)
+    if policy_dataset_features is not None:
+        dataset_features = policy_dataset_features
+    else:
+        dataset_features = combine_feature_dicts(
+            aggregate_pipeline_dataset_features(
+                pipeline=teleop_action_processor,
+                initial_features=create_initial_features(
+                    action=robot.action_features
+                ),  # TODO(steven, pepijn): in future this should be come from teleop or policy
+                use_videos=cfg.dataset.video,
+            ),
+            aggregate_pipeline_dataset_features(
+                pipeline=robot_observation_processor,
+                initial_features=create_initial_features(observation=robot.observation_features),
+                use_videos=cfg.dataset.video,
+            ),
+        )
 
     dataset = None
     listener = None
@@ -525,6 +601,15 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
             teleop.connect()
 
         listener, events = init_keyboard_listener()
+
+        if cfg.wait_before_start:
+            wait_before_start_preview(
+                robot=robot,
+                robot_observation_processor=robot_observation_processor,
+                fps=cfg.wait_preview_fps,
+                display_data=cfg.display_data,
+                display_compressed_images=display_compressed_images,
+            )
 
         if not cfg.dataset.streaming_encoding:
             logging.info(

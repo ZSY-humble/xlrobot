@@ -1,13 +1,78 @@
+XLeRobot ACT 右臂 6 维真机版本
+================================
+
+真机执行前必须显式配置端口和相机，不能依赖默认设备号。
+设备号可能随 USB 插拔顺序变化，先检查再 export。
+
+当前常用配置示例：
+- FOLLOWER_PORT1=/dev/ttyACM1  左臂 + 头部
+- FOLLOWER_PORT2=/dev/ttyACM0  右臂 + 两轮底盘
+- CAM_TOP=/dev/video2
+- CAM_RIGHT_WRIST=/dev/video4
+- policy: outputs/train/xlerobot_act_pick_place_clean_le400_act_a100_80k_bs64_chunk60_quantiles/checkpoints/030000/pretrained_model
+- task: pick up the object and place it into the target container
+
+
+基础检查
+--------
 
 python act/check_cameras.py
 
-
-python act/check_xlerobot_ports.py 
-
-通过这两个可以知道端口号  然后知道之后
+python act/check_xlerobot_ports.py
 
 python act/install_calibration.py --force
+
+
+采集示例
+--------
 
 python act/record_self_teleop.py \
   --num-episodes 50 \
   --task "pick up the object and place it into the target container"
+
+
+离线检查 2 秒轨迹
+----------------
+
+python act/eval_act_right_arm.py \
+  --offline-check \
+  --episode-index=0 \
+  --max-frames=60
+
+不指定 --episode-index 时默认使用 episode 0。
+
+
+真机执行默认版本
+----------------
+
+先配置本次真机实际端口和相机：
+
+export FOLLOWER_PORT1=/dev/ttyACM1
+export FOLLOWER_PORT2=/dev/ttyACM0
+export CAM_TOP=/dev/video2
+export CAM_RIGHT_WRIST=/dev/video4
+
+然后直接运行即可使用当前默认 policy 和控制参数：
+
+python act/eval_act_right_arm.py
+
+等价于：
+
+python act/eval_act_right_arm.py \
+  --policy=outputs/train/xlerobot_act_pick_place_clean_le400_act_a100_80k_bs64_chunk60_quantiles/checkpoints/030000/pretrained_model \
+  --episode-time=0 \
+  --fps=30 \
+  --max-relative-target=15 \
+  --abort-start-delta=40 \
+  --abort-total-delta=160 \
+  --print-actions \
+  --print-every=30 \
+  --task="pick up the object and place it into the target container"
+
+流程：
+- 先连接机器人和相机，打开 Rerun。
+- 按 Enter 前只显示相机和状态，不发送 action。
+- 按 Enter 后先检查第一帧 action，超过 abort-start-delta 会中止。
+- 执行时只写右臂 6 个 Goal_Position。
+- 左臂、头部、底盘不会写入 action。
+- Ctrl+C 可随时停止。

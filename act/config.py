@@ -29,20 +29,20 @@ class Config:
     """全局配置 —— 仅 2 路 USB（XLeRobot 双总线）。"""
 
     # ===== XLeRobot 串口（仅 2 路，即整机本身的两根总线）=====
-    follower_port1: str = field(default_factory=lambda: _env("FOLLOWER_PORT1", "/dev/ttyACM0"))
+    follower_port1: str = field(default_factory=lambda: _env("FOLLOWER_PORT1", ""))
     """bus1：左臂 6 电机 + 头部 2 电机；环境变量 FOLLOWER_PORT1。"""
 
-    follower_port2: str = field(default_factory=lambda: _env("FOLLOWER_PORT2", "/dev/ttyACM1"))
+    follower_port2: str = field(default_factory=lambda: _env("FOLLOWER_PORT2", ""))
     """bus2：右臂 6 电机 + 两轮底盘 2 电机；环境变量 FOLLOWER_PORT2。"""
 
     follower_id: str = field(default_factory=lambda: _env("FOLLOWER_ID", "xlerobot_main"))
     """XLeRobot 实例 ID（用于标定文件命名）；环境变量 FOLLOWER_ID。"""
 
     # ===== 相机（都在 XLeRobot 上）=====
-    cam_top: str = field(default_factory=lambda: _env("CAM_TOP", "/dev/video0"))
+    cam_top: str = field(default_factory=lambda: _env("CAM_TOP", ""))
     """桌面外部相机；环境变量 CAM_TOP。录入数据集。"""
 
-    cam_right_wrist: str = field(default_factory=lambda: _env("CAM_RIGHT_WRIST", "/dev/video2"))
+    cam_right_wrist: str = field(default_factory=lambda: _env("CAM_RIGHT_WRIST", ""))
     """右腕相机；环境变量 CAM_RIGHT_WRIST。录入数据集。"""
 
     cam_width: int = int(_env("CAM_W", "640"))
@@ -72,7 +72,10 @@ class Config:
     """右臂固定复位姿态 JSON；环境变量 RESET_HOME_PATH。"""
 
     task_desc: str = field(
-        default_factory=lambda: _env("TASK_DESC", "Pick up the red cube and place it into the box")
+        default_factory=lambda: _env(
+            "TASK_DESC",
+            "pick up the object and place it into the target container",
+        )
     )
     push_to_hub: bool = _env("PUSH_TO_HUB", "false").lower() == "true"
 

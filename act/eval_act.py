@@ -24,6 +24,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +33,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from act.config import CONFIG
+
+
+def _quiet_rerun_env() -> dict[str, str]:
+    """给 Rerun/wgpu 子进程降噪，避免真机确认界面被 warning 刷屏。"""
+    env = os.environ.copy()
+    env["RUST_LOG"] = "error"
+    return env
 
 
 def _cameras_arg() -> str:
@@ -52,6 +60,29 @@ def main() -> int:
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--task", type=str, default=None)
     parser.add_argument("--eval-name", type=str, default=None, help="评估数据集后缀名")
+    parser.add_argument("--yes", action="store_true", help="跳过开始前安全确认")
+    parser.add_argument(
+        "--preview-cameras",
+        action="store_true",
+        help="执行前先打开 top/right_wrist 相机预览；按 q/Esc 关闭预览后再确认启动",
+    )
+    parser.add_argument(
+        "--preview-rerun",
+        action="store_true",
+        help="在同一个 lerobot-record 进程里先打开 Rerun 看相机，按 Enter 后再执行",
+    )
+    parser.add_argument(
+        "--preview-seconds",
+        type=float,
+        default=0.0,
+        help="Rerun 预览最长时长；<=0 表示确认前一直显示",
+    )
+    parser.add_argument(
+        "--max-relative-target",
+        type=int,
+        default=int(CONFIG.max_relative_target),
+        help="每次下发给单个关节的最大相对变化；越小越慢，<=0 表示关闭限幅",
+    )
     args = parser.parse_args()
 
     policy_path = Path(args.policy) if args.policy else CONFIG.policy_path
@@ -62,7 +93,10 @@ def main() -> int:
 
     device = args.device or CONFIG.train_device
     task_desc = args.task or CONFIG.task_desc
-    eval_dataset_name = args.eval_name or f"{CONFIG.dataset_name}_eval_run"
+    checkpoint_name = policy_path.parent.name if policy_path.name == "pretrained_model" else policy_path.name
+    eval_dataset_name = args.eval_name or f"eval_{CONFIG.dataset_name}_{checkpoint_name}"
+    if not eval_dataset_name.startswith("eval_"):
+        eval_dataset_name = f"eval_{eval_dataset_name}"
     eval_repo_id = f"{CONFIG.hf_user}/{eval_dataset_name}" if CONFIG.hf_user else f"local/{eval_dataset_name}"
     eval_root = CONFIG.dataset_root / eval_repo_id
 
@@ -73,6 +107,7 @@ def main() -> int:
     print(f"  评估计划    : {args.num_episodes} × {args.episode_time}s")
     print(f"  task        : {task_desc}")
     print(f"  device      : {device}")
+    print(f"  单步限幅    : {args.max_relative_target}")
     print()
     print("⚠️  推理时**不需要推左臂**。左臂保持不动（不接收 policy action）。")
     print("   桌面物体摆到训练时的相似位置，按提示开始。")
@@ -98,8 +133,58 @@ def main() -> int:
         "--dataset.streaming_encoding=true",
         "--dataset.push_to_hub=false",
     ]
+    if args.max_relative_target > 0:
+        cmd.insert(6, f"--robot.max_relative_target={args.max_relative_target}")
+    if args.preview_rerun and not args.yes:
+        cmd.extend(
+            [
+                "--wait_before_start=true",
+                "--wait_preview_fps=10",
+            ]
+        )
     print("$", __import__("shlex").join(cmd), "\n")
-    return subprocess.call(cmd)
+
+    if args.preview_cameras:
+        preview_cmd = [
+            sys.executable,
+            "act/check_cameras.py",
+            "--devices",
+            CONFIG.cam_top,
+            CONFIG.cam_right_wrist,
+            "--width",
+            str(CONFIG.cam_width),
+            "--height",
+            str(CONFIG.cam_height),
+            "--fps",
+            str(CONFIG.cam_fps),
+        ]
+        print("🔍 先打开相机预览；确认画面后按 q 或 Esc 关闭预览窗口。")
+        print("$", __import__("shlex").join(preview_cmd), "\n")
+        preview_ret = subprocess.call(preview_cmd, env=_quiet_rerun_env())
+        if preview_ret != 0:
+            print(f"❌ 相机预览失败，返回码：{preview_ret}。未启动 policy 执行。")
+            return preview_ret
+        print()
+
+    if not args.yes and not args.preview_rerun:
+        print("⚠️  即将启动 ACT 真机执行，右臂会移动。")
+        print("   请确认：右臂周围安全、桌面已清空或物体在安全位置、手在急停附近。")
+        try:
+            input("   按 Enter 开始执行；按 Ctrl+C 取消：")
+        except KeyboardInterrupt:
+            print("\n🛑 已取消，未启动 policy 执行。")
+            return 130
+        print()
+    elif args.preview_rerun and not args.yes:
+        print("🔍 将在 lerobot-record 内部先打开 Rerun 预览。")
+        print("   同一个进程会停在确认提示；按 Enter 后直接开始 3 秒执行，不会重启。")
+        print()
+
+    try:
+        return subprocess.call(cmd, env=_quiet_rerun_env())
+    except KeyboardInterrupt:
+        print("\n🛑 已停止 ACT 真机执行。")
+        return 130
 
 
 if __name__ == "__main__":
