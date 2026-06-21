@@ -34,40 +34,35 @@ lerobot-replay \
 
 ### 一键启动
 ```bash
-python act/eval_act.py
+python act/eval_act_right_arm.py
 ```
 
-参数：
+当前默认参数等价于：
+
 ```bash
-python act/eval_act.py --num-episodes=20 --episode-time=30
-python act/eval_act.py --policy=/abs/path/to/checkpoints/last/pretrained_model
-python act/eval_act.py --task="新任务描述（必须与训练一致）"
+python act/eval_act_right_arm.py \
+  --episode-time=0 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0.01 \
+  --action-smoothing-alpha=0.7
 ```
 
-### 命令展开（脚本内部）
+常用参数：
+
 ```bash
-lerobot-record \
-  --robot.type=xlerobot_2wheels \
-  --robot.port1=/dev/ttyACM0 \
-  --robot.port2=/dev/ttyACM1 \
-  --robot.id=xlerobot_main \
-  --robot.cameras='{
-    top:         {"type": "opencv", "index_or_path": "/dev/video0", ...},
-    right_wrist: {"type": "opencv", "index_or_path": "/dev/video2", ...}
-  }' \
-  --policy.path=outputs/train/act_xlerobot_self_teleop/checkpoints/last/pretrained_model \
-  --policy.device=cuda \
-  --display_data=true \
-  --dataset.repo_id=${HF_USER}/xlerobot_act_self_teleop_eval_run \
-  --dataset.root=dataset/${HF_USER}/xlerobot_act_self_teleop_eval_run \
-  ...
+python act/eval_act_right_arm.py --episode-time=30
+python act/eval_act_right_arm.py --policy=/abs/path/to/checkpoints/last/pretrained_model
+python act/eval_act_right_arm.py --task="新任务描述（必须与训练一致）"
 ```
 
 ### 关键点
 - ✅ **不需要主臂**！action 由模型推理给出
-- ✅ 模型只输出 `right_arm_*.pos` 6 维 → `XLerobot.send_action` 按前缀过滤 → 只动右臂
+- ✅ 模型只输出 `right_arm_*.pos` 6 维
+- ✅ 脚本绕开整机 16 维 action schema，只写 `bus2` 的右臂 6 个 `Goal_Position`
 - ✅ **左臂保持当前位置不动**（推理时甚至可以把左臂摆到一个安全姿态再启动）
 - ⚠️ `--task` 必须和训练时一致（语言条件 ACT 才需要）
+- ⚠️ 按 Enter 前只显示 Rerun 相机 / 状态，不发送 action；按 Enter 后才开始执行
 
 ---
 
@@ -86,13 +81,24 @@ lerobot-record \
 ## 📊 四、推理性能调优
 
 ### 速度
-- ACT 默认推理频率 ≈ chunk_size / fps（100/30 ≈ 3 秒一次）
-- 觉得迟滞，调小 `--policy.n_action_steps`（每段下发更少步，更频繁推理）
+- 当前默认开启 `--temporal-ensemble-coeff=0.01`，每个控制周期都会重新推理并融合 ACT 未来动作。
+- 如果 GPU 压力过大、控制周期掉帧，可以先关闭 Rerun，再做对照：
+
+```bash
+python act/eval_act_right_arm.py \
+  --episode-time=30 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0 \
+  --action-smoothing-alpha=0.4
+```
 
 ### 稳定性
 - 推理前**人手把右臂摆到训练数据的 home pose**附近
 - 物体位置不要超出训练数据覆盖范围
 - **相机外参必须与训练时一致**（位置/角度/分辨率）
+- 保持 `--fps=30`，和采集帧率一致
+- 保持 `--max-relative-target=10`，和采集限幅一致
 
 ---
 
@@ -100,7 +106,9 @@ lerobot-record \
 
 | 现象 | 原因 | 解决 |
 |---|---|---|
-| 右臂抖动 | 训练数据噪声大 | 重新清洗数据集，多训 step |
+| 右臂抖动 | 可能是 ACT chunk 边界跳变 / 限幅过大 / 输出缺少时间融合 | 用当前默认：`TE=0.01`、`alpha=0.7`、限幅 10 |
+| 每隔约 2 秒顿一下 | 当前模型 `chunk_size=60`，30Hz 下一个 chunk 约 2 秒，边界可能不连续 | 开启 `--temporal-ensemble-coeff=0.01` |
+| 开启 TE 后变慢 | temporal ensemble 和低通叠加后滞后 | 提高 `--action-smoothing-alpha` 到 0.85 或 1 |
 | 总抓空 | 相机外参变了 | 把相机摆回训练时位置 |
 | 模型加载报错 | path 错 | 路径应到 `checkpoints/last/pretrained_model` |
 | 推理时左臂在动 | 不应该 —— policy 只输出 right_arm_*.pos | 看模型 features，是不是训练数据 schema 错了 |

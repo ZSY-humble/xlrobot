@@ -81,7 +81,8 @@ act/
 ├── check_xlerobot_ports.py      串口总线识别
 ├── setup_udev_rules.py          生成稳定 USB 别名规则
 ├── train_act.py                 ACT 训练
-└── eval_act.py                  真机推理（仅右臂）
+├── eval_act_right_arm.py        当前推荐真机推理（严格仅控右臂 6 维）
+└── eval_act.py                  旧版真机推理入口
 ```
 
 ---

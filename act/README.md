@@ -118,8 +118,47 @@ lerobot-dataset-viz \
 # 训练 ACT
 python act/train_act.py
 
-# 真机评估
-python act/eval_act.py
+# 真机部署评估：严格仅控右臂 6 维
+python act/eval_act_right_arm.py
+```
+
+## 真机部署默认版本
+
+当前推荐部署入口是：
+
+```bash
+python act/eval_act_right_arm.py
+```
+
+它等价于使用下面这组已经在真机上验证过的低抖动参数：
+
+```bash
+python act/eval_act_right_arm.py \
+  --episode-time=0 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0.01 \
+  --action-smoothing-alpha=0.7
+```
+
+关键行为：
+
+- `--episode-time=0` 表示不限时运行，直到 `Ctrl+C`。
+- `--fps=30` 与采集数据帧率一致。
+- `--max-relative-target=10` 与采集时动作限幅一致。
+- `--temporal-ensemble-coeff=0.01` 启用 ACT temporal ensemble，每个控制周期重新推理并融合未来动作。
+- `--action-smoothing-alpha=0.7` 在 temporal ensemble 后保留较弱低通，继续抑制残余单帧跳变。
+- 脚本只写右臂 6 个 `Goal_Position`，不会写左臂、头部、底盘。
+
+如果需要做对照实验，可以关闭 temporal ensemble：
+
+```bash
+python act/eval_act_right_arm.py \
+  --episode-time=30 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0 \
+  --action-smoothing-alpha=0.4
 ```
 
 ## 文件索引
@@ -133,7 +172,8 @@ python act/eval_act.py
 - `teleoperate_self.py`: 自我遥操作验证
 - `record_self_teleop.py`: ACT 数据采集主脚本
 - `train_act.py`: ACT 训练入口
-- `eval_act.py`: 真机部署评估入口
+- `eval_act_right_arm.py`: ACT 右臂 6 维真机部署入口
+- `eval_act.py`: 旧版真机部署评估入口
 - `docs/`: 详细手册和排错说明
 
 ## 注意

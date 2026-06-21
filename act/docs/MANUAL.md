@@ -13,7 +13,7 @@
 - `act/mirror.py`：左臂到右臂的镜像映射，支持 `probe` 实测哪些关节需要取反。
 - `act/record_self_teleop.py`：正式采集，边左推右跟边录数据。
 - `act/train_act.py`：训练 ACT。
-- `act/eval_act.py`：加载训练好的 ACT 做真机推理，目标是只控制右臂。
+- `act/eval_act_right_arm.py`：加载训练好的 ACT 做真机推理，严格只控制右臂 6 维。
 
 已经做过代码级检查：
 
@@ -464,25 +464,40 @@ outputs/train/act_xlerobot_self_teleop/checkpoints/last/pretrained_model
 训练完成后：
 
 ```bash
-python act/eval_act.py
+python act/eval_act_right_arm.py
 ```
+
+当前默认部署参数已经按真机实测成功率较高的版本设置：
+
+```bash
+python act/eval_act_right_arm.py \
+  --episode-time=0 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0.01 \
+  --action-smoothing-alpha=0.7
+```
+
+其中 `--episode-time=0` 表示不限时运行，直到 `Ctrl+C`。
 
 指定 policy：
 
 ```bash
-python act/eval_act.py \
+python act/eval_act_right_arm.py \
   --policy outputs/train/act_xlerobot_self_teleop/checkpoints/last/pretrained_model
 ```
 
-指定评估段数：
+短时测试：
 
 ```bash
-python act/eval_act.py --num-episodes 10 --episode-time 30
+python act/eval_act_right_arm.py --episode-time 30
 ```
 
-推理时不需要再推动左臂。模型输出右臂 6 维 action，理论上只控制右臂。
+推理时不需要再推动左臂。模型输出右臂 6 维 action，脚本只写右臂
+`Goal_Position`，不会写左臂、头部、底盘。
 
-⚠️ 这一步建议先短时、低风险测试，因为它涉及模型推理、action 后处理和真机执行。
+⚠️ 如果感觉动作抖动，优先看 [07_troubleshooting.md](07_troubleshooting.md)
+里的 ACT 右臂部署复盘；不要只按“数据脏/重训”处理。
 
 ---
 
@@ -509,6 +524,7 @@ python act/record_self_teleop.py --num-episodes 3
 lerobot-dataset-viz --repo-id local/xlerobot_act_self_teleop --episode-index 0
 python act/record_self_teleop.py --num-episodes 50 --resume
 python act/train_act.py
+python act/eval_act_right_arm.py --episode-time 30
 ```
 
 日常采集：
@@ -604,4 +620,5 @@ ls dataset/local/xlerobot_act_self_teleop
 - [teleoperate_self.py](/home/zsy/project/lerobot/act/teleoperate_self.py)：左推右跟验证
 - [record_self_teleop.py](/home/zsy/project/lerobot/act/record_self_teleop.py)：正式数据采集
 - [train_act.py](/home/zsy/project/lerobot/act/train_act.py)：ACT 训练
-- [eval_act.py](/home/zsy/project/lerobot/act/eval_act.py)：ACT 真机推理
+- [eval_act_right_arm.py](/home/zsy/project/lerobot/act/eval_act_right_arm.py)：ACT 右臂 6 维真机推理
+- [eval_act.py](/home/zsy/project/lerobot/act/eval_act.py)：旧版 ACT 真机推理入口

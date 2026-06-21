@@ -9,7 +9,7 @@ XLeRobot ACT 右臂 6 维真机版本
 - FOLLOWER_PORT2=/dev/ttyACM0  右臂 + 两轮底盘
 - CAM_TOP=/dev/video2
 - CAM_RIGHT_WRIST=/dev/video4
-- policy: outputs/train/xlerobot_act_pick_place_clean_le400_act_a100_80k_bs64_chunk60_quantiles/checkpoints/030000/pretrained_model
+- policy: outputs/train/xlerobot_act_pick_place_clean_le400_act_a100_80k_bs64_chunk60_quantiles/checkpoints/025000/pretrained_model
 - task: pick up the object and place it into the target container
 
 
@@ -59,15 +59,43 @@ python act/eval_act_right_arm.py
 等价于：
 
 python act/eval_act_right_arm.py \
-  --policy=outputs/train/xlerobot_act_pick_place_clean_le400_act_a100_80k_bs64_chunk60_quantiles/checkpoints/030000/pretrained_model \
+  --policy=outputs/train/xlerobot_act_pick_place_clean_le400_act_a100_80k_bs64_chunk60_quantiles/checkpoints/025000/pretrained_model \
   --episode-time=0 \
   --fps=30 \
-  --max-relative-target=15 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0.01 \
+  --action-smoothing-alpha=0.7 \
   --abort-start-delta=40 \
   --abort-total-delta=160 \
   --print-actions \
   --print-every=30 \
   --task="pick up the object and place it into the target container"
+
+
+部署参数说明
+------------
+
+当前默认版本已经启用 temporal ensemble：
+- `--episode-time=0`：不限时执行，直到 Ctrl+C。
+- `--fps=30`：和 30fps 采集数据保持一致。
+- `--max-relative-target=10`：匹配采集时的动作限幅。
+- `--temporal-ensemble-coeff=0.01`：每个控制周期重新推理并融合 ACT 未来动作。
+- `--action-smoothing-alpha=0.7`：保留较弱低通，抑制残余单帧跳变。
+
+推荐直接运行默认版本：
+
+python act/eval_act_right_arm.py \
+  --print-every=10
+
+如果要关闭 temporal ensemble 做对照：
+
+python act/eval_act_right_arm.py \
+  --episode-time=30 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0 \
+  --action-smoothing-alpha=0.4 \
+  --print-every=10
 
 流程：
 - 先连接机器人和相机，打开 Rerun。

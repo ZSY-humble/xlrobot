@@ -99,9 +99,58 @@
 
 ## 🤖 八、推理 / 部署问题
 
+### ACT 右臂部署复盘：抖动不一定是训练坏了
+
+当前推荐入口是：
+
+```bash
+python act/eval_act_right_arm.py
+```
+
+默认部署参数已经按真机测试成功率较高的版本调整为：
+
+```bash
+python act/eval_act_right_arm.py \
+  --episode-time=0 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0.01 \
+  --action-smoothing-alpha=0.7
+```
+
+这几个参数是成组生效的，不建议单独乱改：
+
+- `fps=30`：和采集数据帧率一致。训练时按 30fps 学到的动作节奏，部署也尽量保持 30Hz。
+- `max-relative-target=10`：和采集时的动作限幅一致。部署限幅比采集大太多，容易把模型输出里的跳变放大到舵机目标。
+- `temporal-ensemble-coeff=0.01`：开启 ACT temporal ensemble，每个控制周期重新预测未来动作并融合，缓解 chunk 边界跳变。
+- `action-smoothing-alpha=0.7`：在 temporal ensemble 后保留较弱低通，继续压残余单帧跳变；如果设得太小会明显变慢。
+
+可用于对照的旧式队列执行版本：
+
+```bash
+python act/eval_act_right_arm.py \
+  --episode-time=30 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0 \
+  --action-smoothing-alpha=0.4
+```
+
+经验判断：
+
+- 如果右臂像“每隔一段时间顿一下”，优先怀疑 ACT chunk 边界跳变，开启 temporal ensemble。
+- 如果右臂是持续碎抖，优先看 `raw-current` 和 `sent-current`，判断是模型输出抖还是发送目标抖。
+- 如果开启 temporal ensemble 后动作更稳但变慢，适当提高 `--action-smoothing-alpha`，例如 `0.85` 或 `1`。
+- 如果开启 temporal ensemble 后控制周期掉帧，说明每帧推理压力太大；先关 Rerun 或关闭 TE 做对照。
+- 如果只有某一个关节抖，先不要急着重训，检查该关节机械间隙、线缆拉扯、标定、负载和终端里对应关节的 `raw-current`。
+
 | 现象 | 原因 | 解决 |
 |---|---|---|
-| 模型抖动 | 数据脏 / 训练步数不够 | 清数据 / 训到 200k step |
+| 模型抖动 | 不一定是数据脏；可能是 ACT chunk 边界跳变、限幅过大或缺少发送端平滑 | 先用 `eval_act_right_arm.py` 默认参数：TE=0.01、alpha=0.7、限幅 10 |
+| 每隔约 2 秒顿一下 | `chunk_size=60` 且 30Hz 时，每个 chunk 约 2 秒；边界可能不连续 | 开启 `--temporal-ensemble-coeff=0.01` |
+| 开启 TE 后动作慢 / 黏 | temporal ensemble 已经融合，再叠加强低通会滞后 | 把 `--action-smoothing-alpha` 从 0.7 提到 0.85 或 1 |
+| 开启 TE 后反而卡顿 | 每帧重新推理导致 GPU / 相机 / Rerun 压力过大 | 关 Rerun、确认 GPU 空闲；或 `--temporal-ensemble-coeff=0` 做对照 |
+| 发送目标总是顶到限幅 | policy 目标离当前右臂 state 太远，限幅在追赶 | 起始姿态摆回训练 home 附近；确认 `max-relative-target` 不大于采集分布 |
 | 总抓空 | 测试时相机角度变了 | 摆回训练时位置 |
 | 推理频率不稳 | GPU 抢占 | 关其它 GPU 进程 |
 | 加载 checkpoint 报错 | 路径错 | 路径到 `checkpoints/last/pretrained_model` |

@@ -47,7 +47,7 @@ from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
 DEFAULT_POLICY = (
     "outputs/train/"
     "xlerobot_act_pick_place_clean_le400_act_a100_80k_bs64_chunk60_quantiles/"
-    "checkpoints/030000/pretrained_model"
+    "checkpoints/025000/pretrained_model"
 )
 DEFAULT_ROOT = "dataset/zhoushangyu77/xlerobot_act_pick_place_clean_le400"
 DEFAULT_REPO = "zhoushangyu77/xlerobot_act_pick_place_clean_le400"
@@ -193,6 +193,23 @@ def _format_joint_deltas(values: dict[str, float], reference: dict[str, float], 
     return " | ".join(parts)
 
 
+def _smooth_action(
+    target: dict[str, float],
+    prev_target: dict[str, float] | None,
+    action_names: list[str],
+    alpha: float,
+) -> dict[str, float]:
+    """对右臂目标做一阶低通，抑制单帧跳变和 chunk 边界顿挫。"""
+    if prev_target is None or alpha >= 1.0:
+        return dict(target)
+    if alpha <= 0.0:
+        return {name: float(prev_target[name]) for name in action_names}
+    return {
+        name: alpha * float(target[name]) + (1.0 - alpha) * float(prev_target[name])
+        for name in action_names
+    }
+
+
 def _predict_right_arm_action(
     *,
     obs: dict,
@@ -304,7 +321,25 @@ def main() -> int:
     )
     parser.add_argument("--fps", type=int, default=CONFIG.cam_fps)
     parser.add_argument("--task", default=DEFAULT_TASK)
-    parser.add_argument("--max-relative-target", type=float, default=15.0)
+    parser.add_argument("--max-relative-target", type=float, default=10.0)
+    parser.add_argument(
+        "--action-smoothing-alpha",
+        type=float,
+        default=0.7,
+        help=(
+            "右臂发送目标的一阶低通系数；1 表示关闭平滑，"
+            "0.4 更稳但更慢，0.7 适合当前 temporal ensemble 默认部署"
+        ),
+    )
+    parser.add_argument(
+        "--temporal-ensemble-coeff",
+        type=float,
+        default=0.01,
+        help=(
+            "启用 ACT temporal ensemble 的加权系数，常用 0.01；"
+            "默认 0.01；传 0 可关闭；开启后会强制 n_action_steps=1"
+        ),
+    )
     parser.add_argument("--preview-fps", type=int, default=10)
     parser.add_argument("--display-data", action="store_true", default=True)
     parser.add_argument("--display-ip", type=str, default=None)
@@ -352,6 +387,12 @@ def main() -> int:
     if args.max_relative_target <= 0:
         print("❌ 真机执行必须设置正数 --max-relative-target，首测建议 2。")
         return 1
+    if not 0.0 < args.action_smoothing_alpha <= 1.0:
+        print("❌ --action-smoothing-alpha 必须在 (0, 1] 范围内。")
+        return 1
+    if args.temporal_ensemble_coeff is not None and args.temporal_ensemble_coeff < 0.0:
+        print("❌ --temporal-ensemble-coeff 必须 >= 0，常用 0.01；0 表示关闭。")
+        return 1
     if not args.offline_check and not _validate_robot_io_config():
         return 2
 
@@ -361,6 +402,13 @@ def main() -> int:
     run_time_desc = "不限时，直到 Ctrl+C" if args.episode_time <= 0 else f"{args.episode_time}s"
     print(f"  执行时长         : {run_time_desc} @ {args.fps}Hz")
     print(f"  单步限幅         : {args.max_relative_target}")
+    print(f"  action 平滑      : alpha={args.action_smoothing_alpha}")
+    temporal_ensemble_desc = (
+        f"on, coeff={args.temporal_ensemble_coeff}, n_action_steps=1"
+        if args.temporal_ensemble_coeff
+        else "off"
+    )
+    print(f"  temporal ensemble: {temporal_ensemble_desc}")
     print(f"  task             : {args.task}")
     print("  ⚠️ 不使用 lerobot-record，不创建 16 维整机 action schema\n")
 
@@ -383,6 +431,9 @@ def main() -> int:
     if hasattr(policy_cfg, "pretrained_backbone_weights"):
         policy_cfg.pretrained_backbone_weights = None
     policy_cfg.pretrained_path = str(policy_path)
+    if args.temporal_ensemble_coeff:
+        policy_cfg.temporal_ensemble_coeff = args.temporal_ensemble_coeff
+        policy_cfg.n_action_steps = 1
     policy = make_policy(policy_cfg, ds_meta=ds.meta)
     preprocessor, postprocessor = make_pre_post_processors(
         policy_cfg=policy_cfg,
@@ -543,6 +594,12 @@ def main() -> int:
                 action_names=action_names,
                 max_relative_target=args.max_relative_target,
             )
+            candidate_action = _smooth_action(
+                target=candidate_action,
+                prev_target=prev_sent,
+                action_names=action_names,
+                alpha=args.action_smoothing_alpha,
+            )
             max_total_delta, total_worst_joint = _max_delta_from_reference(
                 candidate_action,
                 start_state,
@@ -556,7 +613,7 @@ def main() -> int:
                 break
             sent_action = _send_right_arm_only(
                 robot=robot,
-                action=action,
+                action=candidate_action,
                 action_names=action_names,
                 max_relative_target=args.max_relative_target,
             )

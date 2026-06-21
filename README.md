@@ -36,6 +36,41 @@ lerobot-info
 > [!IMPORTANT]
 > For detailed installation guide, please see the [Installation Documentation](https://huggingface.co/docs/lerobot/installation).
 
+## XLeRobot ACT Right Arm Deployment
+
+本仓库包含 XLeRobot 自我遥操作采集、ACT 训练和右臂 6 维真机部署流程。详细手册见 [act/README.md](./act/README.md) 和 [act/manual.txt](./act/manual.txt)。
+
+当前推荐的右臂 ACT 部署入口：
+
+```bash
+conda activate lerobot
+
+export FOLLOWER_PORT1=/dev/ttyACM1
+export FOLLOWER_PORT2=/dev/ttyACM0
+export CAM_TOP=/dev/video2
+export CAM_RIGHT_WRIST=/dev/video4
+
+python act/eval_act_right_arm.py
+```
+
+默认部署参数已经更新为当前真机验证成功率较高的版本：
+
+```bash
+python act/eval_act_right_arm.py \
+  --episode-time=0 \
+  --fps=30 \
+  --max-relative-target=10 \
+  --temporal-ensemble-coeff=0.01 \
+  --action-smoothing-alpha=0.7
+```
+
+说明：
+
+- `--episode-time=0` 表示不限时运行，直到 `Ctrl+C`。
+- `--temporal-ensemble-coeff=0.01` 启用 ACT temporal ensemble，每个控制周期重新推理并融合未来动作。
+- `--action-smoothing-alpha=0.7` 保留较弱低通，降低残余单帧跳变。
+- 脚本严格只发送右臂 6 维 `right_arm_*.pos`，不会控制左臂、头部或底盘。
+
 ## Robots & Control
 
 <div align="center">
